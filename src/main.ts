@@ -74,7 +74,8 @@ async function start(): Promise<void> {
     backgroundColor: '#F7F2E8',
     scale: { mode: Phaser.Scale.NONE, width: v.w, height: v.h, zoom: 1 / v.dpr },
     render: { antialias: true, mipmapFilter: 'LINEAR_MIPMAP_LINEAR' },
-    input: { activePointers: 2 },
+    // The game never uses the wheel: let it scroll the host page when embedded
+    input: { activePointers: 2, mouse: { preventDefaultWheel: false } },
     disableContextMenu: true,
     banner: false,
     scene: [BootScene, SplashScene, HomeScene, GameScene, ResultScene, JournalScene, SettingsScene],
