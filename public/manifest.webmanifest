@@ -1,0 +1,11 @@
+{
+  "name": "AṢỌ",
+  "short_name": "AṢỌ",
+  "description": "A calm textile puzzle inspired by Nigerian cloth.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7F2E8",
+  "theme_color": "#F7F2E8",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
