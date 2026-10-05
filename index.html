@@ -16,6 +16,9 @@
     <link rel="apple-touch-icon" href="./icon.svg" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <title>AṢỌ</title>
+    <script>
+      if (window.self !== window.top) document.documentElement.classList.add('embedded');
+    </script>
     <style>
       html,
       body {
@@ -30,6 +33,12 @@
         user-select: none;
         -webkit-touch-callout: none;
         -webkit-tap-highlight-color: transparent;
+      }
+      /* Embedded in another page (e.g. a portfolio iframe): let wheel
+         scrolling pass through to the host page instead of trapping it. */
+      html.embedded,
+      html.embedded body {
+        overscroll-behavior: auto;
       }
       #app {
         position: fixed;
