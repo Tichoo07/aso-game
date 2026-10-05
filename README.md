@@ -7,6 +7,9 @@ motif shown above the board and it is added to your Cloth Journal. Main play has
 
 Built with TypeScript, Phaser 3, Vite and localStorage. There is no backend.
 
+**Play it:** https://tichoo07.github.io/aso-game/ (published automatically from `main` by
+`.github/workflows/deploy.yml`)
+
 ![Home, line preview, weave, result and journal screens](docs/screens.png)
 
 ---
