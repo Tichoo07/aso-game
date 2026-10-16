@@ -7,7 +7,8 @@ motif shown above the board and it is added to your Cloth Journal. Main play has
 
 Built with TypeScript, Phaser 3, Vite and localStorage. There is no backend.
 
-**Play it:** https://tichoo07.github.io/aso-game/ (published automatically from `main` by
+**Play it:** https://emmanuel-tichoo.netlify.app/aso/ (on the portfolio) or
+https://tichoo07.github.io/aso-game/ (published automatically from `main` by
 `.github/workflows/deploy.yml`)
 
 ![Home, line preview, weave, result and journal screens](docs/screens.png)
@@ -282,6 +283,18 @@ npm run preview    # serve dist/ locally to check it
 (Netlify, Vercel, Cloudflare Pages, GitHub Pages, S3) under any sub-path. Fonts are bundled
 locally, so nothing is fetched from a CDN. The bundle is about 350 KB gzipped, mostly
 Phaser.
+
+### Publishing to the portfolio
+
+The portfolio serves its own copy of the game at `/aso/`. Some networks block GitHub Pages,
+and this way anyone who can open the portfolio can also play. After changing the game:
+
+```bash
+npm run publish:portfolio   # builds, then copies dist/ into the portfolio's aso/ folder
+```
+
+Then publish the portfolio as usual. The script expects the portfolio in
+`~/Downloads/emmanuel-portfolio`; set `PORTFOLIO_DIR` if it lives somewhere else.
 
 For app stores, wrap `dist/` with Capacitor. To use native haptics, pass a driver to
 `app().haptics.setDriver(...)` that calls Capacitor Haptics; the web Vibration API is not
