@@ -43,6 +43,8 @@ export interface SaveData {
   /** Keyed by local date, YYYY-MM-DD. */
   daily: Record<string, DailyRecord>;
   lifetime: Lifetime;
+  /** The how-to-play demo has been shown (it plays automatically once). */
+  tutorialSeen: boolean;
 }
 
 export const LOCALES: readonly LocaleId[] = ['en', 'yo'];
@@ -68,6 +70,7 @@ export function defaultSave(prefersReducedMotion = false): SaveData {
     collections: {},
     daily: {},
     lifetime: { games: 0, lines: 0, weaves: 0 },
+    tutorialSeen: false,
   };
 }
 
@@ -110,6 +113,7 @@ export function migrateSave(raw: unknown, fallback: SaveData = defaultSave()): S
   }
 
   const life = isObj(raw.lifetime) ? raw.lifetime : {};
+  const games = num(life.games, 0);
   return {
     version: SAVE_VERSION,
     bestScore: num(raw.bestScore, 0),
@@ -118,7 +122,9 @@ export function migrateSave(raw: unknown, fallback: SaveData = defaultSave()): S
     activeCollection: typeof raw.activeCollection === 'string' ? raw.activeCollection : fallback.activeCollection,
     collections,
     daily: pruneDaily(daily),
-    lifetime: { games: num(life.games, 0), lines: num(life.lines, 0), weaves: num(life.weaves, 0) },
+    lifetime: { games, lines: num(life.lines, 0), weaves: num(life.weaves, 0) },
+    // Saves from before the demo existed: anyone who has played already knows how
+    tutorialSeen: bool(raw.tutorialSeen, games > 0),
   };
 }
 

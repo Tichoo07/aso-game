@@ -148,6 +148,18 @@ and the game keeps running in memory if storage is unavailable (for example, pri
 
 ---
 
+### How-to-play demo
+
+On a player's first game, a 15-second guided demo plays before the first round, and it can be
+replayed from Settings → How to play. A finger dot drags real pieces through the normal input
+code, so the demo always matches the game. It places a piece, clears a row, then weaves a
+motif. It never changes saved progress.
+
+The script is data in `src/data/demo.ts`: a starting board, three tray pieces and three moves,
+each with a caption. `tests/demo.test.ts` replays it through the rules, so an edit that stops
+it teaching place → clear → weave fails the tests. `src/scenes/DemoDirector.ts` plays it on
+screen.
+
 ## 4. Add a new piece
 
 Open `src/data/shapes.ts` and add an entry:

@@ -28,6 +28,14 @@ describe('persistence', () => {
     expect(migrateSave(42)).toEqual(defaultSave());
   });
 
+  it('shows the demo to new players only', () => {
+    expect(defaultSave().tutorialSeen).toBe(false);
+    // A save from before the demo existed, from someone who has played
+    expect(migrateSave({ lifetime: { games: 3 } }).tutorialSeen).toBe(true);
+    expect(migrateSave({ lifetime: { games: 0 } }).tutorialSeen).toBe(false);
+    expect(migrateSave({ tutorialSeen: true }).tutorialSeen).toBe(true);
+  });
+
   it('repairs bad fields and keeps good ones', () => {
     const s = migrateSave({
       bestScore: -5,

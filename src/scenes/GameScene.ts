@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
-import { gameConfigFor } from '../data';
+import { gameConfigFor, SHAPES } from '../data';
 import { playableCollection, type CollectionDef } from '../data/collections';
+import { DEMO } from '../data/demo';
 import { formatNumber, t } from '../data/i18n';
-import { clearCells, placeShape } from '../game/board';
+import { boardFromRows, clearCells, placeShape } from '../game/board';
 import { BOARD_SIZE, TRAY_SIZE } from '../game/constants';
 import { createDailyGame } from '../game/daily';
 import { placeableSlots } from '../game/gameOver';
@@ -30,11 +31,20 @@ import { goTo } from '../ui/transitions';
 import { localDateKey, shortDateLabel } from '../utils/date';
 import { randomSeed } from '../utils/rng';
 import { BaseScene } from './BaseScene';
+import { DemoDirector, type DemoHost } from './DemoDirector';
 import type { ResultData } from './ResultScene';
+
+/** Where to go when the how-to-play demo ends. */
+export type DemoNext = GameMode | 'settings';
 
 export interface GameSceneData {
   mode?: GameMode;
+  /** Play the how-to-play demo first. It also plays on a player's very first game. */
+  demo?: { then: DemoNext };
 }
+
+/** Pointer id used by the demo's scripted drags; real pointers are never negative. */
+const DEMO_POINTER = -1;
 
 interface DragState {
   slot: number;
@@ -84,12 +94,18 @@ export class GameScene extends BaseScene {
   private popups: Phaser.GameObjects.Text[] = [];
   private popupIndex = 0;
 
+  private demoNext: DemoNext | null = null;
+  private director: DemoDirector | null = null;
+
   constructor() {
     super('Game');
   }
 
   init(data: GameSceneData): void {
     this.mode = data?.mode ?? 'classic';
+    this.demoNext = data?.demo?.then ?? (app().save.data.tutorialSeen ? null : this.mode);
+    if (this.demoNext !== null) this.mode = 'classic';
+    this.director = null;
     this.drag = null;
     this.returningSlot = null;
     this.busy = false;
@@ -104,8 +120,9 @@ export class GameScene extends BaseScene {
     this.collection = playableCollection(save.activeCollection);
     this.config = gameConfigFor(this.collection, save.unlockedPatterns);
     const dailyKey = localDateKey();
-    this.state =
-      this.mode === 'daily'
+    this.state = this.demoNext !== null
+      ? this.demoState()
+      : this.mode === 'daily'
         ? createDailyGame(this.config, dailyKey)
         : createGame(this.config, { mode: this.mode, seed: randomSeed() });
     this.best = this.mode === 'daily' ? (save.daily[dailyKey]?.bestScore ?? 0) : save.bestScore;
@@ -129,6 +146,10 @@ export class GameScene extends BaseScene {
     const slow = this.mode === 'slow';
     for (const o of [this.scoreLabel, this.scoreText, this.bestLabel, this.bestText]) o.setVisible(!slow);
     this.modeTitle.setVisible(slow);
+    if (this.demoNext !== null) {
+      // The demo brings its own captions and Skip button
+      for (const o of [this.pauseBtn, this.scoreLabel, this.scoreText, this.bestLabel, this.bestText, this.modeTitle]) o.setVisible(false);
+    }
 
     // Objective
     this.objPreview = new PatternPreview(this, th);
@@ -155,12 +176,14 @@ export class GameScene extends BaseScene {
 
     app().audio.startAmbient(slow ? 'slow' : 'calm');
     this.refreshObjective();
+    if (this.demoNext !== null) this.director = new DemoDirector(this, this.demoHost(), DEMO);
   }
 
   protected enter(): void {
     this.tray.setPlaceable(placeableSlots(this.state.board, this.state.tray));
     this.tray.setPieces(this.state.tray, true);
-    if (this.mode === 'slow') this.showToast(t('slowWeaveHint'), 2600);
+    if (this.director) void this.director.run();
+    else if (this.mode === 'slow') this.showToast(t('slowWeaveHint'), 2600);
     else if (app().save.data.lifetime.games === 0) this.showToast(t('dragHint'), 4000);
   }
 
@@ -202,9 +225,11 @@ export class GameScene extends BaseScene {
     this.layoutBanner(boardY + side / 2);
     for (const p of this.popups) p.setFontSize(f.font(26));
     this.modal?.layout(f);
+    this.director?.layout();
   }
 
   protected teardown(): void {
+    this.director?.destroy();
     this.input.off('pointermove', this.onPointerMove, this);
     this.input.off('pointerup', this.onPointerUp, this);
     this.input.off('pointerupoutside', this.onPointerUp, this);
@@ -254,6 +279,8 @@ export class GameScene extends BaseScene {
 
   private startDrag(slot: number, pointer: Phaser.Input.Pointer): void {
     if (this.busy || this.modal || this.drag || this.state.over) return;
+    // While the demo plays, only its scripted pointer moves pieces
+    if (this.director && pointer.id !== DEMO_POINTER) return;
     const piece = this.state.tray[slot];
     if (!piece) return;
     if (this.returningSlot !== null) {
@@ -262,7 +289,7 @@ export class GameScene extends BaseScene {
       this.returningSlot = null;
     }
     const { pitch } = this.board;
-    const lift = pointer.wasTouch ? (piece.shape.height * pitch) / 2 + pitch * 0.9 : 0;
+    const lift = pointer.wasTouch ? this.liftFor(piece.shape.height) : 0;
     this.drag = { slot, pointerId: pointer.id, lift, row: -99, col: -99, valid: false };
     this.tray.hide(slot);
     const from = this.tray.slotCenter(slot);
@@ -275,6 +302,11 @@ export class GameScene extends BaseScene {
     animate(this, { targets: this.dragSprite, scale: 1, duration: 90, ease: 'Sine.Out' });
     feedback('piece_pickup');
     this.updateDrag(pointer);
+  }
+
+  /** On touch screens the piece floats above the finger so it stays visible. */
+  private liftFor(height: number): number {
+    return (height * this.board.pitch) / 2 + this.board.pitch * 0.9;
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
@@ -362,7 +394,8 @@ export class GameScene extends BaseScene {
     feedback('piece_place', 'place');
     this.toastText.setAlpha(0);
 
-    if (result.pattern) this.recordWeave(result.pattern.patternId);
+    // The demo's weave is scripted, so it never counts toward the journal
+    if (result.pattern && !this.director) this.recordWeave(result.pattern.patternId);
     if (result.dailyCompleted && this.state.daily) {
       const key = this.state.daily.key;
       app().save.update((s) => withDaily(s, key, { completed: true }));
@@ -453,6 +486,60 @@ export class GameScene extends BaseScene {
       daily: s.daily,
     };
     this.time.delayedCall(reducedMotion() ? 900 : 1700, () => goTo(this, 'Result', data));
+  }
+
+  // How-to-play demo -----------------------------------------------------------
+
+  private demoState(): GameState {
+    const s = createGame(this.config, {
+      mode: 'classic',
+      seed: DEMO.seed,
+      board: boardFromRows(DEMO.board),
+      objectiveId: DEMO.objectiveId,
+    });
+    const tray = DEMO.tray.map(([id, motif], i) => {
+      const shape = SHAPES.find((x) => x.id === id);
+      if (!shape) throw new Error(`Demo uses unknown shape "${id}"`);
+      return { uid: 9000 + i, shape, motif };
+    });
+    return { ...s, tray };
+  }
+
+  private demoHost(): DemoHost {
+    return {
+      frame: () => this.f,
+      theme: this.th,
+      barY: () => this.f.top + this.f.u(40),
+      hintY: () => this.toastText.y,
+      pitch: () => this.board.pitch,
+      slotCenter: (slot) => this.tray.slotCenter(slot),
+      dropPoint: (slot, row, col) => {
+        const shape = this.state.tray[slot]?.shape;
+        const w = shape?.width ?? 1;
+        const h = shape?.height ?? 1;
+        const { pitch, gridX, gridY } = this.board;
+        return { x: gridX + (col + w / 2) * pitch, y: gridY + (row + h / 2) * pitch + this.liftFor(h) };
+      },
+      objectiveBounds: () => {
+        const { x, y, size, w } = this.objBox;
+        const pad = this.f.u(8);
+        return new Phaser.Geom.Rectangle(x - pad, y - pad / 2, w + pad * 2, size + pad);
+      },
+      pointer: (phase, p, slot) => {
+        const pointer = { id: DEMO_POINTER, x: p.x, y: p.y, wasTouch: true } as unknown as Phaser.Input.Pointer;
+        if (phase === 'down' && slot !== undefined) this.startDrag(slot, pointer);
+        else if (phase === 'move') this.onPointerMove(pointer);
+        else if (phase === 'up') this.onPointerUp(pointer);
+      },
+      settled: () => !this.busy && !this.drag,
+      finish: () => {
+        const next = this.demoNext ?? 'classic';
+        app().save.update((s) => ({ ...s, tutorialSeen: true }));
+        if (next === 'settings') goTo(this, 'Settings');
+        else goTo(this, 'Game', { mode: next } satisfies GameSceneData);
+      },
+      replay: () => goTo(this, 'Game', { mode: 'classic', demo: { then: this.demoNext ?? 'classic' } } satisfies GameSceneData),
+    };
   }
 
   // Pause ---------------------------------------------------------------------

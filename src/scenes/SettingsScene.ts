@@ -72,6 +72,9 @@ export class SettingsScene extends BaseScene {
       this.scene.restart();
     });
 
+    const how = this.add.text(0, 0, '›', textStyle('body', 18, th.textMuted)).setOrigin(1, 0.5);
+    this.addRow('howToPlay', null, null, how, () => goTo(this, 'Game', { mode: 'classic', demo: { then: 'settings' } }));
+
     const about = this.add.text(0, 0, '›', textStyle('body', 18, th.textMuted)).setOrigin(1, 0.5);
     this.addRow('about', null, null, about, () => this.openAbout());
   }
